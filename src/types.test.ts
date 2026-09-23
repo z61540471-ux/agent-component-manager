@@ -1,0 +1,3 @@
+import{describe,it,expect}from'vitest';import{filterComponents,Component}from'./types';
+const items=[{id:'1',name:'文档助手',description:'中文描述',path:'C:/skills/docs',kind:'skill',agent:'Codex'},{id:'2',name:'database',description:'query data',path:'C:/mcp',kind:'mcp',agent:'Claude Code'}]as Component[];
+describe('inventory filters',()=>{it('searches Chinese descriptions',()=>expect(filterComponents(items,'中文','all','all').map(c=>c.id)).toEqual(['1']));it('combines agent and kind',()=>expect(filterComponents(items,'','mcp','Codex')).toEqual([]));it('matches paths case-insensitively',()=>expect(filterComponents(items,'C:/SKILLS','all','all')).toHaveLength(1))});
