@@ -8,6 +8,10 @@ plans or filesystem writes. Native implementation details are in
 
 ## 2. Signatures
 
+- `market({ source, query, cursor? }) -> { items, stale, message, nextCursor }`
+  Cursor is optional/null on the first page. MCP cursors are opaque strings;
+  callers must pass the returned value unchanged. Other adapters use page numbers.
+
 - `read_skill({ id }) -> string`
 - `export_inventory({ destination }) -> string` (saved absolute JSON path)
 - Settings adds optional `codexHome` and `claudeHome`; older saved settings remain readable.
@@ -60,6 +64,12 @@ Inventory export uses the native retained scan, requires an absolute local
 JSON destination with an existing parent, and refuses to replace an existing
 file. It never exports raw MCP configuration or backup bytes.
 
+Market caches use `market:v2:` plus a serialized `[source, query, cursor]`
+tuple. Failure may return only that exact cached page, with `stale: true` and
+the original item timestamps; older unpaged array caches are ignored. Responses
+are bounded to 4 MiB. GitHub search stops at 1,000 results. UI browsing stops
+after 34 pages and reports that limit; changing query/source resets results.
+
 ## 4. Validation and error matrix
 
 | Condition | Required behavior |
@@ -81,6 +91,10 @@ file. It never exports raw MCP configuration or backup bytes.
 | Invalid MCP JSON/TOML | Fail without replacing the original file |
 | Manual plugin plan | No executable changes and no success claim |
 | Error from apply | Display error; require renewed confirmation |
+| Market request fails with a cached matching page | Show stale page and original timestamps |
+| Market source/query changes during a request | Discard the old response |
+| Later page fails | Preserve earlier results and allow retry |
+| Repeated market cursor | Stop paging and show a message |
 
 ## 5. Good, base and bad cases
 
@@ -108,6 +122,10 @@ file. It never exports raw MCP configuration or backup bytes.
 - Binding fixtures: stable IDs after description edits, distinct selected
   projects, plugin state inheritance, old snapshot compatibility and denied
   writes to contextual rows. UI must explain read-only actions before preview.
+- Market fixtures: exact cache key isolation, cursor forwarding, source limits,
+  rate-limit headers, stale request disposal and retry after later-page failure.
+  Opt-in `registry::live_checks` tests verify real first/second pages; they are
+  ignored by normal offline test runs.
 - Windows write fixtures verify effective backup directory/file ACLs, junction
   refusal, case aliases, recovery identity tampering, full Skill/MCP lifecycle
   and newly registered plugin ownership invalidating a previous plan.

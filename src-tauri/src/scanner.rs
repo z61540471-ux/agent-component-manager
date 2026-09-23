@@ -1,3 +1,5 @@
+#[path = "codex_plugins.rs"]
+mod codex_plugins;
 use crate::model::*;
 use serde_json::Value;
 use std::{
@@ -644,21 +646,17 @@ pub fn scan(settings: &Settings, previous: &Inventory) -> Inventory {
             &mut HashSet::new(),
             0,
         );
-        skill_tree(
-            &mut inv,
-            &root.join("plugins/cache"),
-            agent,
-            "cache",
-            &mut HashSet::new(),
-            0,
-        );
-        if agent == "Codex" {
-            cached_plugins(
+        if agent != "Codex" {
+            skill_tree(
                 &mut inv,
                 &root.join("plugins/cache"),
-                0,
+                agent,
+                "cache",
                 &mut HashSet::new(),
+                0,
             );
+        }
+        if agent == "Codex" {
             mcp(&mut inv, &root.join("config.toml"), agent, "global", true);
         }
         if agent == "Claude Code" {
@@ -726,57 +724,11 @@ pub fn scan(settings: &Settings, previous: &Inventory) -> Inventory {
             }
         }
     }
+    codex_plugins::scan(&mut inv, settings);
     claude_contexts(&mut inv, settings);
     reconcile_bindings(&mut inv, settings);
     classify(&mut inv, previous);
     inv
-}
-
-fn cached_plugins(inv: &mut Inventory, root: &Path, depth: usize, seen: &mut HashSet<PathBuf>) {
-    if !root.exists() || depth > 6 {
-        return;
-    }
-    let canonical = match fs::canonicalize(root) {
-        Ok(p) => p,
-        Err(e) => {
-            issue(inv, root, e);
-            return;
-        }
-    };
-    if !seen.insert(canonical) {
-        return;
-    }
-    for folder in [".codex-plugin", ".claude-plugin"] {
-        let path = root.join(folder).join("plugin.json");
-        if path.is_file() {
-            if let Some(v) = json_file(inv, &path) {
-                record(
-                    inv,
-                    root,
-                    "plugin",
-                    v["name"].as_str().unwrap_or("unknown").into(),
-                    v["description"]
-                        .as_str()
-                        .unwrap_or("Observed plugin cache; registration and activation unknown")
-                        .into(),
-                    "Codex",
-                    "cache",
-                    &serde_json::to_vec(&v).unwrap_or_default(),
-                    v["version"].as_str().map(String::from),
-                    "cached",
-                    None,
-                );
-            }
-            return;
-        }
-    }
-    if let Ok(entries) = fs::read_dir(root) {
-        for entry in entries.flatten() {
-            if entry.path().is_dir() {
-                cached_plugins(inv, &entry.path(), depth + 1, seen)
-            }
-        }
-    }
 }
 
 fn reconcile_bindings(inv: &mut Inventory, settings: &Settings) {

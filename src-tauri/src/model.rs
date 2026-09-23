@@ -138,6 +138,8 @@ pub struct MarketResult {
     pub items: Vec<MarketItem>,
     pub stale: bool,
     pub message: Option<String>,
+    #[serde(default)]
+    pub next_cursor: Option<String>,
 }
 
 #[cfg(test)]

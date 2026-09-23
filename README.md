@@ -86,3 +86,8 @@ does not imply affiliation or endorsement.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
 Licensed under [MIT](LICENSE).
+
+Market search supports loading subsequent pages, exact-page cache fallback and
+rate-limit messages. Codex plugin configuration is shown separately from cached
+portable/legacy packages, with ownership links for their Skills and MCP entries.
+Codex plugin actions remain read-only; use Codex to install or remove them.

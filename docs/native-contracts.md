@@ -57,3 +57,22 @@ in addition to existing package/path checks. Frontend action policy mirrors
 these restrictions. A standalone Skill manifest is still editable: the
 manifest observation restriction applies to plugin/MCP observations, not to
 every component discovered from a file.
+
+## Codex plugin observations
+
+The scanner accepts portable plugin.json and legacy .codex-plugin/plugin.json
+manifests in the Codex cache. Cache packages have owned Skill/MCP observations;
+MCP headers, arguments and environment values never enter the inventory.
+Declared resource paths must be relative and stay inside the package, including
+existing links. Unsupported declarations produce a scan issue.
+
+User/project config.toml plugin tables produce separate configured or disabled
+rows, including inherited user settings for selected projects. These rows do
+not establish trust, the active cache version or runtime loading. Cache rows
+remain cached even when similarly named settings exist. This deliberately
+avoids treating retained older versions as active installations.
+
+Codex plugin installation/uninstallation and config mutations remain unsupported;
+no cache registration is fabricated. Local catalog source resolution and
+workspace-managed plugin state remain outside this iteration. Format evidence:
+https://developers.openai.com/plugins/build/plugins (inspected 2026-09-23).

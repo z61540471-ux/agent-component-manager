@@ -91,31 +91,18 @@ fn history(state: tauri::State<Shared>) -> Result<Vec<Operation>, String> {
 async fn market(
     source: String,
     query: String,
+    cursor: Option<String>,
     state: tauri::State<'_, Shared>,
 ) -> Result<MarketResult, String> {
-    let key = format!("market:{source}:{query}");
-    let result = tauri::async_runtime::spawn_blocking(move || registry::search(&source, &query))
-        .await
-        .map_err(|e| e.to_string())?;
+    let query = query.trim().to_string();
+    let key = registry::cache_key(&source, &query, cursor.as_deref());
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        registry::search(&source, &query, cursor.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())?;
     let s = state.lock().map_err(|e| e.to_string())?;
-    match result {
-        Ok(items) => {
-            s.db.put(&key, &items)?;
-            Ok(MarketResult {
-                items,
-                stale: false,
-                message: None,
-            })
-        }
-        Err(e) => match s.db.get::<Vec<MarketItem>>(&key) {
-            Some(items) => Ok(MarketResult {
-                items,
-                stale: true,
-                message: Some(e),
-            }),
-            None => Err(e),
-        },
-    }
+    registry::cache_page(&s.db, &key, result)
 }
 #[tauri::command]
 fn preview(

@@ -4,7 +4,7 @@ export interface Settings {home:string;projects:string[];codexHome?:string|null;
 export interface Plan {id:string;title:string;changes:{path:string;beforeHash:string|null;before:string|null;after:string|null}[];warnings:string[];createdAt:number}
 export interface Operation {id:string;title:string;status:string;message:string;at:number}
 export interface MarketItem {name:string;description:string;source:string;url:string;version:string|null;stars:number|null;fetchedAt:number}
-export interface MarketResult {items:MarketItem[];stale:boolean;message:string|null}
+export interface MarketResult {items:MarketItem[];stale:boolean;message:string|null;nextCursor?:string|null}
 export interface Capabilities {mutationsEnabled:boolean;skillPackages:boolean;mcpConfiguration:boolean;githubPinnedImport:boolean;plugins:string;claudeSkillEnablement:boolean}
 export interface McpDetail {name:string;version:string;description:string;config:Record<string,unknown>|null;source:string;fetchedAt:number;warnings:string[];metadata:Record<string,unknown>}
 export function operationFeedback(operation:Operation):{level:'success'|'warning'|'error';message:string} {
