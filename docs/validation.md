@@ -53,7 +53,8 @@ existing files and excludes raw MCP configuration/backup bytes.
 - Codex local catalog resolution and complete cross-Agent lifecycle/binding
   coverage. Selected workspace-local Codex plugin caches are now observed with
   project scope and ownership; plugin writes remain unsupported;
-  Claude plugin actions provide manual native CLI instructions.
+  Claude project marketplace catalogs are observed with project scope and
+  ownership; Claude plugin actions provide manual native CLI instructions.
 - Interactive desktop scan/export/restart validation and clean-account Windows
   installation. SQLite reopen tests and startup smoke are narrower evidence.
 - Full-scope review and acceptance before a production release.

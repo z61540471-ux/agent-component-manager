@@ -17,14 +17,14 @@
 
 - [x] Implement Codex root discovery and Skill/MCP scanning.
 - [x] Implement Claude Code root discovery and Skill/MCP/Plugin scanning.
-- [ ] Add project-scope scanning, hashing, status calculation, and duplicate/conflict classification.
-- [ ] Add fixture tests for the layouts used by the current machine.
+- [x] Add project-scope scanning, hashing, status calculation, and duplicate/conflict classification.
+- [x] Add fixture tests for representative Codex and Claude project/plugin layouts.
 
 ## Phase 4: Registry adapters
 
 - [ ] Implement GitHub search/detail/source resolution with rate-limit and cache handling.
 - [x] Implement official MCP Registry search/detail/version resolution.
-- [ ] Implement Claude Plugin Marketplace discovery and install-source resolution.
+- [x] Implement Claude Plugin Marketplace discovery and local install-source observation.
 - [x] Normalize metadata and retain metric provenance.
 
 ## Phase 5: Planner and executor
