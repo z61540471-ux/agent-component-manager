@@ -50,8 +50,9 @@ existing files and excludes raw MCP configuration/backup bytes.
 
 ## Remaining acceptance
 
-- Codex local catalog resolution, workspace-managed plugin state and complete
-  cross-Agent lifecycle/binding coverage. Codex plugin writes remain unsupported;
+- Codex local catalog resolution and complete cross-Agent lifecycle/binding
+  coverage. Selected workspace-local Codex plugin caches are now observed with
+  project scope and ownership; plugin writes remain unsupported;
   Claude plugin actions provide manual native CLI instructions.
 - Interactive desktop scan/export/restart validation and clean-account Windows
   installation. SQLite reopen tests and startup smoke are narrower evidence.

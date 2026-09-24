@@ -73,6 +73,8 @@ remain cached even when similarly named settings exist. This deliberately
 avoids treating retained older versions as active installations.
 
 Codex plugin installation/uninstallation and config mutations remain unsupported;
-no cache registration is fabricated. Local catalog source resolution and
-workspace-managed plugin state remain outside this iteration. Format evidence:
+no cache registration is fabricated. The scanner also observes selected
+workspace-local caches at `<project>/.codex/plugins/cache`, retaining project
+scope and ownership without claiming trust or runtime loading. Local catalog
+source resolution remains outside this iteration. Format evidence:
 https://developers.openai.com/plugins/build/plugins (inspected 2026-09-23).
