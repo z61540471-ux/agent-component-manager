@@ -627,6 +627,33 @@ pub fn classify(inv: &mut Inventory, previous: &Inventory) {
         c.status.dedup();
     }
 }
+
+/// Keep disappearance visible across scans without resurrecting a component in
+/// the live inventory.  A successful uninstall should leave the component list
+/// empty, while a deleted or moved file that was present in the last snapshot
+/// still needs an actionable diagnostic for the user.
+fn report_stale(previous: &Inventory, current: &mut Inventory) {
+    let present: HashSet<String> = current
+        .components
+        .iter()
+        .map(|component| component.id.clone())
+        .collect();
+    for component in &previous.components {
+        if present.contains(&component.id) {
+            continue;
+        }
+        let path = Path::new(&component.path);
+        if !path.exists() {
+            current.issues.push(Issue {
+                path: component.path.clone(),
+                message: format!(
+                    "Stale inventory entry: {} {} was not found during this scan",
+                    component.kind, component.name
+                ),
+            });
+        }
+    }
+}
 pub fn scan(settings: &Settings, previous: &Inventory) -> Inventory {
     let mut inv = Inventory {
         scanned_at: now(),
@@ -728,6 +755,7 @@ pub fn scan(settings: &Settings, previous: &Inventory) -> Inventory {
     claude_contexts(&mut inv, settings);
     reconcile_bindings(&mut inv, settings);
     classify(&mut inv, previous);
+    report_stale(previous, &mut inv);
     inv
 }
 
@@ -1104,6 +1132,40 @@ mod tests {
             .iter()
             .all(|c| c.status.contains(&"duplicate".into())));
         assert_eq!(inv.components[0].description, "中文描述");
+    }
+
+    #[test]
+    fn missing_previous_component_is_reported_as_stale_issue() {
+        let t = tempfile::tempdir().unwrap();
+        let settings = settings(t.path());
+        let missing = t.path().join(".agents/skills/removed/SKILL.md");
+        let previous = Inventory {
+            components: vec![Component {
+                id: "removed-id".into(),
+                kind: "skill".into(),
+                name: "removed".into(),
+                description: String::new(),
+                agent: "Codex".into(),
+                scope: "global".into(),
+                path: missing.display().to_string(),
+                canonical_path: missing.display().to_string(),
+                hash: "old-hash".into(),
+                version: None,
+                status: vec![],
+                effective: "discovered".into(),
+                source: None,
+                project_path: None,
+                binding_kind: Some("manifest".into()),
+                owner_id: None,
+                last_seen: 1,
+            }],
+            issues: vec![],
+            scanned_at: 1,
+        };
+        let inventory = scan(&settings, &previous);
+        assert!(inventory.issues.iter().any(|issue| {
+            issue.path == missing.display().to_string() && issue.message.contains("Stale inventory")
+        }));
     }
     #[test]
     fn malformed_file_does_not_abort_scan() {
