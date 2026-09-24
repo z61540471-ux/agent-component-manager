@@ -113,6 +113,12 @@ pub(super) fn scan(inv: &mut Inventory, settings: &Settings) {
     // from the user cache so inventory scope and project bindings remain
     // accurate when a project vendors its own plugin package.
     for project in &settings.projects {
+        catalog(
+            inv,
+            Path::new(project),
+            Path::new(project).join(".agents/plugins/marketplace.json"),
+            Some(project),
+        );
         let cache = Path::new(project).join(".codex/plugins/cache");
         walk(
             inv,
@@ -124,6 +130,83 @@ pub(super) fn scan(inv: &mut Inventory, settings: &Settings) {
             "project",
             Some(project),
         );
+    }
+    catalog(
+        inv,
+        Path::new(&settings.home),
+        Path::new(&settings.home).join(".agents/plugins/marketplace.json"),
+        None,
+    );
+}
+
+fn catalog(inv: &mut Inventory, marketplace_root: &Path, path: PathBuf, project: Option<&str>) {
+    if !path.is_file() {
+        return;
+    }
+    let value = match json_file(inv, &path) {
+        Some(value) => value,
+        None => return,
+    };
+    let Some(entries) = value["plugins"].as_array() else {
+        issue(inv, &path, "Codex marketplace catalog has no plugins array");
+        return;
+    };
+    for entry in entries {
+        let Some(name) = entry["name"].as_str() else {
+            issue(inv, &path, "Codex marketplace entry has no name");
+            continue;
+        };
+        let source = &entry["source"];
+        let relative = source.as_str().or_else(|| source["path"].as_str());
+        let Some(relative) = relative.filter(|p| p.starts_with("./")) else {
+            issue(
+                inv,
+                &path,
+                format!("Codex marketplace entry {name} has an unsupported local source"),
+            );
+            continue;
+        };
+        let root = marketplace_root.join(&relative[2..]);
+        let canonical_root = match fs::canonicalize(&root) {
+            Ok(root)
+                if root.starts_with(fs::canonicalize(marketplace_root).unwrap_or_default()) =>
+            {
+                root
+            }
+            _ => {
+                issue(
+                    inv,
+                    &path,
+                    format!("Codex marketplace entry {name} escapes its root"),
+                );
+                continue;
+            }
+        };
+        let manifest = if canonical_root.join("plugin.json").is_file() {
+            canonical_root.join("plugin.json")
+        } else {
+            canonical_root.join(".codex-plugin/plugin.json")
+        };
+        let Some(manifest) = json_file(inv, &manifest) else {
+            issue(
+                inv,
+                &root,
+                format!("Codex marketplace entry {name} has no plugin manifest"),
+            );
+            continue;
+        };
+        package(
+            inv,
+            marketplace_root,
+            &canonical_root,
+            &manifest,
+            canonical_root.join("plugin.json").is_file(),
+            "catalog",
+            project,
+        );
+        if let Some(component) = inv.components.last_mut() {
+            component.source = Some(path.display().to_string());
+        }
     }
 }
 
@@ -299,7 +382,7 @@ fn package(
     };
     if let Some(relative) = skills {
         if let Some(path) = resource(root, relative) {
-            skill_tree(inv, &path, "Codex", "cache", &mut HashSet::new(), 0);
+            skill_tree(inv, &path, "Codex", scope, &mut HashSet::new(), 0);
         } else {
             issue(
                 inv,
@@ -322,7 +405,7 @@ fn package(
         "./.mcp.json"
     });
     if let Some(path) = resource(root, relative) {
-        mcp(inv, &path, "Codex", "cache", false);
+        mcp(inv, &path, "Codex", scope, false);
     } else {
         issue(
             inv,
@@ -332,7 +415,12 @@ fn package(
     }
     for child in &mut inv.components[start..] {
         child.status.push("managed".into());
-        child.effective = "cached".into();
+        child.effective = if scope == "catalog" {
+            "catalog"
+        } else {
+            "cached"
+        }
+        .into();
         bind(child, project, "manifest", Some(&owner));
     }
 }
@@ -390,6 +478,19 @@ mod tests {
             &project_plugin.join("plugin.json"),
             r#"{"name":"project-plugin","version":"1"}"#,
         );
+        let catalog_plugin = project.join("plugins/catalog-plugin");
+        write(
+            &catalog_plugin.join("plugin.json"),
+            r#"{"name":"catalog-plugin","version":"local"}"#,
+        );
+        write(
+            &catalog_plugin.join("skills/catalog-skill/SKILL.md"),
+            "---\nname: catalog-skill\ndescription: fixture\n---\nHello",
+        );
+        write(
+            &project.join(".agents/plugins/marketplace.json"),
+            r#"{"name":"local-repo","plugins":[{"name":"catalog-plugin","source":{"source":"local","path":"./plugins/catalog-plugin"}}]}"#,
+        );
         let inventory = super::super::scan(&settings, &Inventory::default());
         assert!(inventory
             .components
@@ -417,6 +518,23 @@ mod tests {
                 && c.name == "project-plugin"
                 && c.scope == "project"
                 && c.project_path.as_deref() == Some(project.to_str().unwrap())
+        }));
+        assert!(inventory.components.iter().any(|c| {
+            c.kind == "skill"
+                && c.name == "catalog-skill"
+                && c.scope == "catalog"
+                && c.effective == "catalog"
+                && c.owner_id.is_some()
+        }));
+        assert!(inventory.components.iter().any(|c| {
+            c.kind == "plugin"
+                && c.name == "catalog-plugin"
+                && c.scope == "catalog"
+                && c.project_path.as_deref() == Some(project.to_str().unwrap())
+                && c.source
+                    .as_deref()
+                    .unwrap_or("")
+                    .ends_with("marketplace.json")
         }));
         assert!(!serde_json::to_string(&inventory)
             .unwrap()
