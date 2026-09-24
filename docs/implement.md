@@ -37,8 +37,8 @@
 ## Phase 6: UI
 
 - [x] Build inventory-first shell and navigation.
-- [ ] Implement overview, inventory, component detail, marketplace, Change Preview, and settings pages.
-- [ ] Add loading, empty, stale-cache, parse-error, permission-error, and rollback states.
+- [x] Implement overview, inventory, component detail, marketplace, Change Preview, and settings pages.
+- [x] Add loading, empty, stale-cache, parse-error, permission-error, and rollback states.
 
 ## Phase 7: Verification and release
 

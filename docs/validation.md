@@ -33,6 +33,11 @@ Owned/contextual rows explain unavailable actions. Standalone Skills remain edit
 Native export writes a retained inventory snapshot as UTF-8 JSON, refuses
 existing files and excludes raw MCP configuration/backup bytes.
 
+The desktop UI provides inventory, detail, marketplace, preview, settings and
+history views. Scan failures, empty results, stale registry pages, permission
+errors and rollback/recovery outcomes remain visible instead of being replaced
+by a generic success state.
+
 ## Market and Codex plugin iteration
 
 - Market results page by source, query and cursor; exact-page cache fallback
