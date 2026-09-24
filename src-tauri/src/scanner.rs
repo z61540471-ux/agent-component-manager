@@ -1241,6 +1241,29 @@ mod tests {
     }
 
     #[test]
+    fn claude_catalog_rejects_paths_outside_marketplace_root() {
+        let t = tempfile::tempdir().unwrap();
+        let mut settings = settings(t.path());
+        let project = t.path().join("selected");
+        let outside = t.path().join("outside");
+        settings.projects = vec![project.display().to_string()];
+        write(
+            &outside.join(".claude-plugin/plugin.json"),
+            &serde_json::json!({"name":"outside-plugin"}),
+        );
+        write(
+            &project.join(".claude-plugin/marketplace.json"),
+            &serde_json::json!({"name":"local","plugins":[{"name":"outside-plugin","source":{"source":"local","path":"../outside"}}]}),
+        );
+        let inv = scan(&settings, &Inventory::default());
+        assert!(!inv.components.iter().any(|c| c.name == "outside-plugin"));
+        assert!(inv
+            .issues
+            .iter()
+            .any(|i| i.message.contains("escapes its root")));
+    }
+
+    #[test]
     fn project_skills_are_scanned_and_project_codex_bindings_classify_conflicts() {
         let t = tempfile::tempdir().unwrap();
         let mut settings = settings(t.path());
