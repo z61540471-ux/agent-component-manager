@@ -99,7 +99,32 @@ pub(super) fn scan(inv: &mut Inventory, settings: &Settings) {
         }
     }
     let cache = root.join("plugins/cache");
-    walk(inv, &cache, &cache, 0, &mut HashSet::new(), &mut 0);
+    walk(
+        inv,
+        &cache,
+        &cache,
+        0,
+        &mut HashSet::new(),
+        &mut 0,
+        "cache",
+        None,
+    );
+    // Codex also supports project-local plugin caches. Keep these separate
+    // from the user cache so inventory scope and project bindings remain
+    // accurate when a project vendors its own plugin package.
+    for project in &settings.projects {
+        let cache = Path::new(project).join(".codex/plugins/cache");
+        walk(
+            inv,
+            &cache,
+            &cache,
+            0,
+            &mut HashSet::new(),
+            &mut 0,
+            "project",
+            Some(project),
+        );
+    }
 }
 
 fn walk(
@@ -109,6 +134,8 @@ fn walk(
     depth: usize,
     seen: &mut HashSet<PathBuf>,
     count: &mut usize,
+    scope: &str,
+    project: Option<&str>,
 ) {
     if !root.exists() {
         return;
@@ -138,7 +165,15 @@ fn walk(
             continue;
         }
         if let Some(manifest) = json_file(inv, &manifest_path) {
-            package(inv, cache, root, &manifest, relative == "plugin.json");
+            package(
+                inv,
+                cache,
+                root,
+                &manifest,
+                relative == "plugin.json",
+                scope,
+                project,
+            );
         }
         return;
     }
@@ -146,9 +181,16 @@ fn walk(
         Ok(entries) => {
             for entry in entries {
                 match entry {
-                    Ok(entry) if entry.path().is_dir() => {
-                        walk(inv, cache, &entry.path(), depth + 1, seen, count)
-                    }
+                    Ok(entry) if entry.path().is_dir() => walk(
+                        inv,
+                        cache,
+                        &entry.path(),
+                        depth + 1,
+                        seen,
+                        count,
+                        scope,
+                        project,
+                    ),
                     Err(e) => issue(inv, root, e),
                     _ => (),
                 }
@@ -181,7 +223,15 @@ fn resource(root: &Path, relative: &str) -> Option<PathBuf> {
     Some(path)
 }
 
-fn package(inv: &mut Inventory, cache: &Path, root: &Path, manifest: &Value, portable: bool) {
+fn package(
+    inv: &mut Inventory,
+    cache: &Path,
+    root: &Path,
+    manifest: &Value,
+    portable: bool,
+    scope: &str,
+    project: Option<&str>,
+) {
     let Some(name) = manifest["name"].as_str() else {
         issue(inv, root, "Plugin manifest has no name");
         return;
@@ -210,10 +260,16 @@ fn package(inv: &mut Inventory, cache: &Path, root: &Path, manifest: &Value, por
             .unwrap_or("Observed Codex plugin cache; active version unknown")
             .into(),
         "Codex",
-        "cache",
+        scope,
         &serde_json::to_vec(manifest).unwrap_or_default(),
         manifest["version"].as_str().map(String::from),
         "cached",
+        None,
+    );
+    bind(
+        inv.components.last_mut().unwrap(),
+        project,
+        "manifest",
         None,
     );
     let owner = inv.components.last().unwrap().id.clone();
@@ -277,7 +333,7 @@ fn package(inv: &mut Inventory, cache: &Path, root: &Path, manifest: &Value, por
     for child in &mut inv.components[start..] {
         child.status.push("managed".into());
         child.effective = "cached".into();
-        bind(child, None, "manifest", Some(&owner));
+        bind(child, project, "manifest", Some(&owner));
     }
 }
 
@@ -329,6 +385,11 @@ mod tests {
             &legacy.join("workflows/child/SKILL.md"),
             "---\nname: legacy-child\ndescription: fixture\n---\nHello",
         );
+        let project_plugin = project.join(".codex/plugins/cache/local/project/1");
+        write(
+            &project_plugin.join("plugin.json"),
+            r#"{"name":"project-plugin","version":"1"}"#,
+        );
         let inventory = super::super::scan(&settings, &Inventory::default());
         assert!(inventory
             .components
@@ -351,6 +412,12 @@ mod tests {
         assert!(children.iter().all(|c| c.owner_id.is_some()
             && c.effective == "cached"
             && c.status.contains(&"managed".into())));
+        assert!(inventory.components.iter().any(|c| {
+            c.kind == "plugin"
+                && c.name == "project-plugin"
+                && c.scope == "project"
+                && c.project_path.as_deref() == Some(project.to_str().unwrap())
+        }));
         assert!(!serde_json::to_string(&inventory)
             .unwrap()
             .contains("fixture-secret"));
