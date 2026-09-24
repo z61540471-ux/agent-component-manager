@@ -760,10 +760,6 @@ pub fn scan(settings: &Settings, previous: &Inventory) -> Inventory {
 }
 
 fn reconcile_bindings(inv: &mut Inventory, settings: &Settings) {
-    let root = settings.codex_root();
-    let config = fs::read_to_string(root.join("config.toml"))
-        .ok()
-        .and_then(|s| toml::from_str::<toml::Value>(&s).ok());
     for c in &mut inv.components {
         if c.kind != "skill" {
             continue;
@@ -777,6 +773,18 @@ fn reconcile_bindings(inv: &mut Inventory, settings: &Settings) {
             c.status.push("managed".into());
         }
         if c.agent == "Codex" || c.agent == "Shared" {
+            // Project bindings are governed by that project's config.toml;
+            // falling back to the user config here would incorrectly mark a
+            // global disablement on every selected project (and would miss a
+            // project-only disablement entirely).
+            let config_path = c
+                .project_path
+                .as_deref()
+                .map(|project| Path::new(project).join(".codex/config.toml"))
+                .unwrap_or_else(|| settings.codex_root().join("config.toml"));
+            let config = fs::read_to_string(config_path)
+                .ok()
+                .and_then(|s| toml::from_str::<toml::Value>(&s).ok());
             if let Some(entries) = config
                 .as_ref()
                 .and_then(|v| v.get("skills"))
@@ -787,7 +795,7 @@ fn reconcile_bindings(inv: &mut Inventory, settings: &Settings) {
                     if entry
                         .get("path")
                         .and_then(|v| v.as_str())
-                        .map(|p| Path::new(p) == Path::new(&c.path))
+                        .map(|p| same_path(Path::new(p), Path::new(&c.path)))
                         .unwrap_or(false)
                         && entry.get("enabled").and_then(|v| v.as_bool()) == Some(false)
                     {
@@ -1105,6 +1113,64 @@ mod tests {
             "discovered"
         );
     }
+
+    #[test]
+    fn project_skills_are_scanned_and_project_codex_bindings_classify_conflicts() {
+        let t = tempfile::tempdir().unwrap();
+        let mut settings = settings(t.path());
+        let first = t.path().join("project-one");
+        let second = t.path().join("project-two");
+        settings.projects = vec![first.display().to_string(), second.display().to_string()];
+
+        for (project, body) in [(&first, "one"), (&second, "two")] {
+            let skill = project.join(".codex/skills/shared/SKILL.md");
+            fs::create_dir_all(skill.parent().unwrap()).unwrap();
+            fs::write(
+                &skill,
+                format!("---\nname: shared\ndescription: project skill\n---\n{body}"),
+            )
+            .unwrap();
+        }
+        let disabled_path = first.join(".codex/skills/shared/SKILL.md");
+        fs::write(
+            first.join(".codex/config.toml"),
+            format!(
+                "[[skills.config]]\npath = '{}'\nenabled = false\n",
+                disabled_path.display().to_string().replace('\\', "/")
+            ),
+        )
+        .unwrap();
+
+        let inv = scan(&settings, &Inventory::default());
+        let project_skills: Vec<_> = inv
+            .components
+            .iter()
+            .filter(|c| c.kind == "skill" && c.name == "shared")
+            .collect();
+        assert_eq!(project_skills.len(), 2);
+        assert!(project_skills.iter().all(|c| c.scope == "project"));
+        assert!(project_skills.iter().all(|c| c.project_path.is_some()));
+        assert!(project_skills
+            .iter()
+            .all(|c| c.status.contains(&"conflict".into())));
+        assert_eq!(
+            project_skills
+                .iter()
+                .find(|c| c.project_path.as_deref() == Some(first.to_str().unwrap()))
+                .unwrap()
+                .effective,
+            "disabled"
+        );
+        assert_eq!(
+            project_skills
+                .iter()
+                .find(|c| c.project_path.as_deref() == Some(second.to_str().unwrap()))
+                .unwrap()
+                .effective,
+            "discovered"
+        );
+    }
+
     #[test]
     fn parses_unicode_and_classifies_copies() {
         let t = tempfile::tempdir().unwrap();
