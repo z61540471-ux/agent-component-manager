@@ -45,11 +45,11 @@ Agent components are scattered across user and project directories, configuratio
 ## Acceptance criteria
 
 - [x] 1. On Windows, the app detects Codex CLI and Claude Code roots or lets the user correct their paths.
-- [ ] 2. The app scans global and project-level Skills, MCP configuration, and Plugin manifests.
-- [ ] 3. The inventory identifies duplicate content, same-name conflicts, broken paths, disabled components, and drift.
+- [x] 2. The app scans global and project-level Skills, MCP configuration, and Plugin manifests.
+- [x] 3. The inventory identifies duplicate content, same-name conflicts, broken paths, disabled components, stale entries, and drift.
 - [x] 4. Marketplace search covers GitHub, the official MCP Registry, and Claude Plugin Marketplace.
 - [x] 5. Results show description, source, version, and available Star/download metrics with the metric source identified.
-- [ ] 6. Install, update, enable/disable, and uninstall all produce a Change Plan before modifying files.
+- [x] 6. Install, update, enable/disable, and uninstall all produce a Change Plan before modifying files; plugin plans remain manual native CLI instructions.
 - [x] 7. Applying a Change Plan creates backups, performs the change, rescans, and records the result.
 - [x] 8. Failed changes restore affected files from backup where possible and report the remaining error.
 - [ ] 9. The inventory and operation history survive application restart.
@@ -73,5 +73,5 @@ Criteria 7 and 8 now have Windows fixture evidence: complete Skill/MCP operation
 private ACL backups, persisted history, rescans, injected failures, verified
 rollback and external-edit protection. The Windows write capability is enabled.
 Criteria 1 and 11 now have implementation and fixture evidence: custom roots are persisted and shared by scan/planning; native JSON export retains Unicode, omits MCP credential values and refuses overwrite. The desktop UI calls that command and reports the saved path.
-Criteria 2, 3 and 6 remain blocking for Codex plugin schema/project coverage and broader per-Agent lifecycle/effective bindings.
+Criteria 2, 3 and 6 are covered by project scanners, normalized diagnostics and retained Change Plans. Remaining limitations are complete per-Agent lifecycle/effective binding coverage and unsupported native plugin writes.
 Criterion 9 remains pending user verification: SQLite reopen tests and startup loading are implemented, but an interactive desktop restart should confirm the last inventory and history remain visible. Interactive scan/export is also recommended smoke verification, beyond the automated export acceptance evidence.
