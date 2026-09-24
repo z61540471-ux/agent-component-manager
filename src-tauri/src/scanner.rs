@@ -369,6 +369,108 @@ fn project_plugin(inv: &mut Inventory, root: &Path) {
         }
     }
 }
+
+fn claude_catalog(
+    inv: &mut Inventory,
+    marketplace_root: &Path,
+    path: &Path,
+    project: Option<&str>,
+) {
+    let Some(value) = json_file(inv, path) else {
+        return;
+    };
+    let Some(entries) = value["plugins"].as_array() else {
+        issue(inv, path, "Claude marketplace catalog has no plugins array");
+        return;
+    };
+    let Some(root_canonical) = fs::canonicalize(marketplace_root).ok() else {
+        issue(
+            inv,
+            marketplace_root,
+            "Claude marketplace root is unavailable",
+        );
+        return;
+    };
+    for entry in entries {
+        let Some(name) = entry["name"].as_str() else {
+            issue(inv, path, "Claude marketplace entry has no name");
+            continue;
+        };
+        let source = &entry["source"];
+        let relative = source.as_str().or_else(|| source["path"].as_str());
+        let Some(relative) = relative.filter(|p| p.starts_with("./")) else {
+            issue(
+                inv,
+                path,
+                format!("Claude marketplace entry {name} has an unsupported local source"),
+            );
+            continue;
+        };
+        let candidate = marketplace_root.join(&relative[2..]);
+        let Ok(root) = fs::canonicalize(&candidate) else {
+            issue(
+                inv,
+                &candidate,
+                format!("Claude marketplace entry {name} source is missing"),
+            );
+            continue;
+        };
+        if !root.starts_with(&root_canonical) {
+            issue(
+                inv,
+                &candidate,
+                format!("Claude marketplace entry {name} escapes its root"),
+            );
+            continue;
+        }
+        let manifest_path = if root.join(".claude-plugin/plugin.json").is_file() {
+            root.join(".claude-plugin/plugin.json")
+        } else {
+            root.join("plugin.json")
+        };
+        let Some(manifest) = json_file(inv, &manifest_path) else {
+            issue(
+                inv,
+                &root,
+                format!("Claude marketplace entry {name} has no plugin manifest"),
+            );
+            continue;
+        };
+        record(
+            inv,
+            &root,
+            "plugin",
+            manifest["name"].as_str().unwrap_or(name).into(),
+            manifest["description"]
+                .as_str()
+                .unwrap_or("Local marketplace plugin; runtime unknown")
+                .into(),
+            "Claude Code",
+            "catalog",
+            &serde_json::to_vec(&manifest).unwrap_or_default(),
+            manifest["version"].as_str().map(String::from),
+            "catalog",
+            Some(path.display().to_string()),
+        );
+        let plugin = inv.components.last_mut().unwrap();
+        bind(plugin, project, "catalog", None);
+        let owner = plugin.id.clone();
+        let before = inv.components.len();
+        skill_tree(
+            inv,
+            &root.join("skills"),
+            "Claude Code",
+            "catalog",
+            &mut HashSet::new(),
+            0,
+        );
+        for child in &mut inv.components[before..] {
+            child.status.push("managed".into());
+            child.effective = "catalog".into();
+            bind(child, project, "catalog", Some(&owner));
+        }
+    }
+}
 fn listed(value: &Value, field: &str, name: &str) -> bool {
     value[field]
         .as_array()
@@ -713,6 +815,12 @@ pub fn scan(settings: &Settings, previous: &Inventory) -> Inventory {
         }
         let project_start = inv.components.len();
         project_plugin(&mut inv, root);
+        claude_catalog(
+            &mut inv,
+            root,
+            &root.join(".claude-plugin/marketplace.json"),
+            Some(project),
+        );
         for (dir, agent) in [
             (".agents", "Shared"),
             (".codex", "Codex"),
@@ -1072,6 +1180,14 @@ mod tests {
             &serde_json::json!({"name":"development"}),
         );
         write(
+            &project.join("catalog-plugin/.claude-plugin/plugin.json"),
+            &serde_json::json!({"name":"catalog-plugin","version":"local"}),
+        );
+        write(
+            &project.join(".claude-plugin/marketplace.json"),
+            &serde_json::json!({"name":"local","plugins":[{"name":"catalog-plugin","source":{"source":"local","path":"./catalog-plugin"}}]}),
+        );
+        write(
             &package.join(".claude-plugin/plugin.json"),
             &serde_json::json!({"name":"manifest-name"}),
         );
@@ -1111,6 +1227,16 @@ mod tests {
                 .unwrap()
                 .effective,
             "discovered"
+        );
+        let catalog = inv
+            .components
+            .iter()
+            .find(|c| c.name == "catalog-plugin")
+            .unwrap();
+        assert_eq!(catalog.scope, "catalog");
+        assert_eq!(
+            catalog.project_path.as_deref(),
+            Some(project.to_str().unwrap())
         );
     }
 
