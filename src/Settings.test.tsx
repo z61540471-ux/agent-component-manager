@@ -24,7 +24,7 @@ it('saves custom roots and uses null to restore automatic detection', async () =
   expect((await screen.findByRole('status')).textContent).toContain('设置已保存');
 });
 it('clears selected component and retained preview when rescanning', async () => {
-  const component = { id: 'fixture', name: 'fixture-server', kind: 'mcp', agent: 'Codex', scope: 'global', bindingKind: 'registration', description: '', path: 'C:/config.toml', canonicalPath: 'C:/config.toml', hash: '123', effective: 'configured', status: [], version: null, source: null, lastSeen: 10 } as Component;
+  const component = { id: 'fixture', name: 'fixture-server', kind: 'mcp', agent: 'Codex', scope: 'project', projectPath: 'C:/project', bindingKind: 'registration', description: '', path: 'C:/project/.codex/config.toml', canonicalPath: 'C:/project/.codex/config.toml', hash: '123', effective: 'configured', status: [], version: null, source: null, lastSeen: 10 } as Component;
   vi.mocked(invoke).mockImplementation(async command => {
     if (command === 'settings') return { home: 'C:/fixture', projects: [] };
     if (command === 'inventory') return { components: [component], issues: [], scannedAt: 10 };
@@ -37,6 +37,7 @@ it('clears selected component and retained preview when rescanning', async () =>
   fireEvent.click(await screen.findByRole('button', { name: 'fixture-server' }));
   expect(screen.getByRole('button', { name: '关闭详情' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '移除注册预览' }));
+  await waitFor(() => expect(invoke).toHaveBeenCalledWith('preview_mcp', expect.objectContaining({ action: 'uninstall', project: 'C:/project' })));
   await screen.findByText('Old preview');
   fireEvent.click(screen.getByRole('button', { name: '扫描本机' }));
   await waitFor(() => expect(screen.queryByText('Old preview')).toBeNull());
